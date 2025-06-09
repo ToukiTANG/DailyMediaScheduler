@@ -1,22 +1,17 @@
+import ctypes
+import locale
 import os
-import time
 import subprocess
-from datetime import datetime
-import configparser
-
-import os
 import sys
 import time
-import subprocess
-import win32com.client
+from datetime import datetime
+
+import pythoncom
 import win32api
+import win32com.client
 import win32con
 import win32gui
 import win32process
-import pythoncom
-import ctypes
-import locale
-from datetime import datetime
 
 # ================== 配置区域 ==================
 VIDEO_PATHS = [
@@ -93,15 +88,35 @@ class MediaController:
         self.close_all()
         try:
             if os.path.exists(PLAYER_PATH) and os.path.exists(video_path):
+                # 使用PotPlayer全屏循环播放
                 self.player_process = subprocess.Popen(
-                    [PLAYER_PATH, video_path, "/fullscreen", "/play", "/close"],
+                    [
+                        PLAYER_PATH,
+                        video_path,
+                        "/play",  # 立即开始播放
+                        "/repeat",  # 循环播放
+                        "/fullscreen",  # 全屏模式
+                        "/close"  # 播放完成后关闭播放器
+                    ],
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
-                log(f"开始播放视频: {os.path.basename(video_path)}")
+                log(f"开始循环播放视频: {os.path.basename(video_path)}")
+
+                # 等待播放器启动并确保全屏
                 time.sleep(3)
+
+                # 确保窗口在前台
                 self._ensure_foreground("PotPlayer")
+
+                # 额外措施：发送F键进入全屏（确保）
+                try:
+                    win32api.keybd_event(win32con.VK_F, 0, 0, 0)
+                    time.sleep(0.1)
+                    win32api.keybd_event(win32con.VK_F, 0, win32con.KEYEVENTF_KEYUP, 0)
+                except:
+                    pass
             else:
-                log(f"错误: PotPlayer或视频文件不存在 - Player: {PLAYER_PATH}, Video: {video_path}")
+                log(f"错误: 播放器或视频文件不存在 - Player: {PLAYER_PATH}, Video: {video_path}")
         except Exception as e:
             log(f"视频播放失败: {str(e)}")
 
