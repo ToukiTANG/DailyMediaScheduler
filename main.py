@@ -106,7 +106,7 @@ class MediaController:
                 time.sleep(3)
 
                 # 确保窗口在前台
-                self._ensure_foreground("PotPlayer")
+                # self._ensure_foreground("PotPlayer")
 
                 # 额外措施：发送F键进入全屏（确保）
                 try:
@@ -174,18 +174,18 @@ class MediaController:
             if hwnds:
                 hwnd = hwnds[0]
 
-                # 方法1: 使用SetWindowPos设置窗口为最顶层
-                win32gui.SetWindowPos(
-                    hwnd,
-                    win32con.HWND_TOPMOST,  # 最顶层
-                    0, 0, 0, 0,
-                    win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW
-                )
+                # # 方法1: 使用SetWindowPos设置窗口为最顶层
+                # win32gui.SetWindowPos(
+                #     hwnd,
+                #     win32con.HWND_TOPMOST,  # 最顶层
+                #     0, 0, 0, 0,
+                #     win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW
+                # )
 
-                # 方法2: 尝试恢复窗口（如果最小化）
-                if win32gui.IsIconic(hwnd):
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-
+                # # 方法2: 尝试恢复窗口（如果最小化）
+                # if win32gui.IsIconic(hwnd):
+                #     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                #
                 # 方法3: 使用更可靠的前景窗口设置方法
                 self._set_foreground(hwnd)
 
@@ -242,16 +242,16 @@ class DailyScheduler:
             now = datetime.now().time()
             hour, minute = now.hour, now.minute
 
-            if hour == 23 and minute == 30:
+            if hour == 13 and minute == 0:
                 log("7:30 - 切换到复制模式并播放视频")
                 DisplayManager.set_display_mode(1)
                 self.media.play_video(VIDEO_PATHS[0])
 
-            elif hour == 23 and minute == 31:
+            elif hour == 13 and minute == 6:
                 log("8:30 - 关闭视频并播放PPT")
                 self.media.play_ppt(PPT_PATHS[0])
 
-            elif hour == 23 and minute == 32:
+            elif hour == 13 and minute == 4:
                 log("11:30 - 关闭PPT并播放视频")
                 self.media.play_video(VIDEO_PATHS[0])
 
