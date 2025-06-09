@@ -95,8 +95,7 @@ class MediaController:
                         video_path,
                         "/play",  # 立即开始播放
                         "/repeat",  # 循环播放
-                        "/fullscreen",  # 全屏模式
-                        "/close"  # 播放完成后关闭播放器
+                        "/fullscreen"  # 全屏模式
                     ],
                     creationflags=subprocess.CREATE_NO_WINDOW
                 )
@@ -106,15 +105,7 @@ class MediaController:
                 time.sleep(3)
 
                 # 确保窗口在前台
-                # self._ensure_foreground("PotPlayer")
-
-                # 额外措施：发送F键进入全屏（确保）
-                try:
-                    win32api.keybd_event(win32con.VK_F, 0, 0, 0)
-                    time.sleep(0.1)
-                    win32api.keybd_event(win32con.VK_F, 0, win32con.KEYEVENTF_KEYUP, 0)
-                except:
-                    pass
+                self._ensure_foreground("PotPlayer")
             else:
                 log(f"错误: 播放器或视频文件不存在 - Player: {PLAYER_PATH}, Video: {video_path}")
         except Exception as e:
@@ -128,11 +119,11 @@ class MediaController:
                 self.powerpoint = win32com.client.Dispatch("PowerPoint.Application")
                 self.powerpoint.Visible = True
                 self.powerpoint.WindowState = 2  # ppWindowMinimized
-                self.presentation = self.powerpoint.Presentations.Open(ppt_path, WithWindow=False)
+                self.presentation = self.powerpoint.Presentations.Open(ppt_path, WithWindow=True)
                 self.presentation.SlideShowSettings.Run()
                 log(f"开始播放PPT: {os.path.basename(ppt_path)}")
                 time.sleep(5)
-                self._ensure_foreground("幻灯片放映 - [test.pptx]")
+                self._ensure_foreground("幻灯片放映")
             else:
                 log(f"错误: PPT文件不存在 - {ppt_path}")
         except Exception as e:
@@ -174,18 +165,6 @@ class MediaController:
             if hwnds:
                 hwnd = hwnds[0]
 
-                # # 方法1: 使用SetWindowPos设置窗口为最顶层
-                # win32gui.SetWindowPos(
-                #     hwnd,
-                #     win32con.HWND_TOPMOST,  # 最顶层
-                #     0, 0, 0, 0,
-                #     win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW
-                # )
-
-                # # 方法2: 尝试恢复窗口（如果最小化）
-                # if win32gui.IsIconic(hwnd):
-                #     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                #
                 # 方法3: 使用更可靠的前景窗口设置方法
                 self._set_foreground(hwnd)
 
@@ -196,36 +175,51 @@ class MediaController:
             log(f"窗口激活失败: {str(e)}")
 
     def _set_foreground(self, hwnd):
-        """更可靠的方法设置前景窗口"""
         try:
-            # 获取当前前景窗口的线程ID
-            foreground_thread = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+            fg_window = win32gui.GetForegroundWindow()
+            fg_thread = win32process.GetWindowThreadProcessId(fg_window)[0]
+            target_thread = win32process.GetWindowThreadProcessId(hwnd)[0]
 
-            # 获取目标窗口的线程ID
-            target_thread = win32process.GetWindowThreadProcessId(hwnd)
+            if fg_thread != target_thread:
+                ctypes.windll.user32.AttachThreadInput(fg_thread, target_thread, True)
 
-            # 如果线程不同，附加线程输入
-            if foreground_thread[0] != target_thread[0]:
-                ctypes.windll.user32.AttachThreadInput(ctypes.c_ulong(target_thread[0]),
-                                                       ctypes.c_ulong(foreground_thread[0]),
-                                                       True)
+            # 恢复窗口
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            else:
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
 
-            # 设置前景窗口
-            log(f'hwnd:{hwnd}')
+            # 窗口置顶再取消置顶，触发激活
+            win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+
+            # 允许设置前台窗口（关键！）
+            ctypes.windll.user32.AllowSetForegroundWindow(-1)
+
+            # ALT键辅助激活
+            win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
+            time.sleep(0.05)
+            win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+            # 尝试前台激活
             win32gui.SetForegroundWindow(hwnd)
 
-            # 如果附加了线程输入，现在分离
-            if foreground_thread[0] != target_thread[0]:
-                ctypes.windll.user32.AttachThreadInput(ctypes.c_ulong(target_thread[0]),
-                                                       ctypes.c_ulong(foreground_thread[0]),
-                                                       False)
+            if fg_thread != target_thread:
+                ctypes.windll.user32.AttachThreadInput(fg_thread, target_thread, False)
 
-            # 额外激活窗口
-            win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-            win32gui.SetFocus(hwnd)
-            win32gui.SetActiveWindow(hwnd)
+            # 模拟鼠标点击窗口中心
+            rect = win32gui.GetWindowRect(hwnd)
+            x = (rect[0] + rect[2]) // 2
+            y = (rect[1] + rect[3]) // 2
+            win32api.SetCursorPos((x, y))
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
 
+            log(f"窗口激活成功: hwnd={hwnd}")
             return True
+
         except Exception as e:
             log(f"高级窗口激活失败: {str(e)}")
             return False
@@ -242,16 +236,16 @@ class DailyScheduler:
             now = datetime.now().time()
             hour, minute = now.hour, now.minute
 
-            if hour == 13 and minute == 0:
+            if hour == 7 and minute == 30:
                 log("7:30 - 切换到复制模式并播放视频")
                 DisplayManager.set_display_mode(1)
                 self.media.play_video(VIDEO_PATHS[0])
 
-            elif hour == 13 and minute == 6:
+            elif hour == 8 and minute == 30:
                 log("8:30 - 关闭视频并播放PPT")
                 self.media.play_ppt(PPT_PATHS[0])
 
-            elif hour == 13 and minute == 4:
+            elif hour == 20 and minute == 46:
                 log("11:30 - 关闭PPT并播放视频")
                 self.media.play_video(VIDEO_PATHS[0])
 
